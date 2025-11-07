@@ -1,0 +1,169 @@
+Quick start carla
+
+cd carla_packed_linux
+source carla-venv/bin/activate
+
+
+DRI_PRIME=1 ./CarlaUE4.sh
+
+CARLA의 첫 번째 단계  https://carla.readthedocs.io/en/latest/tuto_first_steps/ 
+
+
+다른 터미널에서 코드 실행 - 가상환경 활성화 한 뒤
+
+-----파이게임 열기
+cd PythonAPI/examples
+	python3 generate_traffic.py
+		-차량 30대, 보행자 8명 생성
+	python3 manual_control.py
+		-운전 가능한 pygame창 생성됨, 조작법은 맨 아래 복붙함
+-----------------------
+cd  PythonAPI/util 
+	
+	./config.py --no-rendering      # Disable rendering
+	./config.py --map Town05        # Change map
+	./config.py --weather ClearNoon # Change weather
+
+	./config.py --help # Check all the available configuration options
+		맵, 기상 변경 가능
+		
+날씨, 지도 목록
+weather presets:
+
+    ClearNight, ClearNoon, ClearSunset, CloudyNight, CloudyNoon,
+    CloudySunset, Default, DustStorm, HardRainNight, HardRainNoon,
+    HardRainSunset, MidRainSunset, MidRainyNight, MidRainyNoon,
+    SoftRainNight, SoftRainNoon, SoftRainSunset, WetCloudyNight,
+    WetCloudyNoon, WetCloudySunset, WetNight, WetNoon, WetSunset.
+
+available maps:
+
+    AnnotationColorLandscape, Town01, Town01_Opt, Town02, Town02_Opt,
+    Town03, Town03_Opt, Town04, Town04_Opt, Town05, Town05_Opt,
+    Town10HD, Town10HD_Opt.
+
+
+조작법	Use ARROWS or WASD keys for control.
+
+	    W            : throttle 가속
+	    S            : brake
+	    A/D          : steer left/right 조종
+	    Q            : toggle reverse  
+	    Space        : hand-brake
+	    P            : toggle autopilot  자동 조종
+	    M            : toggle manual transmission
+	    ,/.          : gear up/down
+	    CTRL + W     : toggle constant velocity mode at 60 km/h
+
+	    L            : toggle next light type
+	    SHIFT + L    : toggle high beam
+	    Z/X          : toggle right/left blinker
+	    I            : toggle interior light
+
+	    TAB          : change sensor position
+	    ` or N       : next sensor
+	    [1-9]        : change to sensor [1-9]
+	    G            : toggle radar visualization
+	    C            : change weather (Shift+C reverse)
+	    Backspace    : change vehicle
+
+	    O            : open/close all doors of vehicle
+	    T            : toggle vehicle's telemetry
+
+	    V            : Select next map layer (Shift+V reverse)
+	    B            : Load current selected map layer (Shift+B to unload)
+
+	    R            : toggle recording images to disk
+
+	    CTRL + R     : toggle recording of simulation (replacing any previous)
+	    CTRL + P     : start replaying last recorded simulation
+	    CTRL + +     : increments the start time of the replay by 1 second (+SHIFT = 10 seconds)
+	    CTRL + -     : decrements the start time of the replay by 1 second (+SHIFT = 10 seconds)
+
+	    F1           : toggle HUD
+	    H/?          : toggle help
+	    ESC          : quit
+
+------------------VScode or Jupyter Notebook에서 편집
+
+----새 창에서 client 연결
+
+python3
+
+import carla
+import random
+
+# Connect to the client and retrieve the world object
+client = carla.Client('localhost', 2000)
+world = client.get_world()
+----------위치 가져오고, 뷰 설정하기
+
+# Retrieve the spectator object
+spectator = world.get_spectator()
+
+# Get the location and rotation of the spectator through its transform
+transform = spectator.get_transform()
+
+location = transform.location
+rotation = transform.rotation
+
+# Set the spectator with an empty transform
+spectator.set_transform(carla.Transform())
+# This will set the spectator at the origin of the map, with 0 degrees
+# pitch, yaw and roll - a good way to orient yourself in the map
+-----------NPC 추가
+# Get the blueprint library and filter for the vehicle blueprints
+vehicle_blueprints = world.get_blueprint_library().filter('*vehicle*')
+
+---------차량 랜덤 생성 50개
+# Get the map's spawn points
+spawn_points = world.get_map().get_spawn_points()
+
+# Spawn 50 vehicles randomly distributed throughout the map 
+# for each spawn point, we choose a random vehicle from the blueprint library
+for i in range(0,50):
+    world.try_spawn_actor(random.choice(vehicle_blueprints), random.choice(spawn_points))
+
+-----중심이 될 차량
+ego_vehicle = world.spawn_actor(random.choice(vehicle_blueprints), random.choice(spawn_points))
+
+
+---------센서 추가
+# Create a transform to place the camera on top of the vehicle
+camera_init_trans = carla.Transform(carla.Location(z=1.5))
+
+# We create the camera through a blueprint that defines its properties
+camera_bp = world.get_blueprint_library().find('sensor.camera.rgb')
+
+# We spawn the camera and attach it to our ego vehicle
+camera = world.spawn_actor(camera_bp, camera_init_trans, attach_to=ego_vehicle)
+
+-----녹화(콜백)
+# Start camera with PyGame callback
+camera.listen(lambda image: image.save_to_disk('out/%06d.png' % image.frame))
+------녹화 중단
+camera.stop()
+
+-------교통관리자, 애니메이션 차량
+for vehicle in world.get_actors().filter('*vehicle*'): # 모든 차량
+    vehicle.set_autopilot(True) #자율주행
+
+
+-------에고 차량 할당
+ego_bp = world.get_blueprint_library().find('vehicle.lincoln.mkz_2020')
+
+ego_bp.set_attribute('role_name', 'hero')
+
+ego_vehicle = world.spawn_actor(ego_bp, random.choice(spawn_points))
+
+
+------사용 가능한 맵 확인하기
+client.get_available_maps()
+-------- 지도 로드하기
+client.load_world('Town03_Opt')
+
+-----사용 가능한 차 확인하기
+for bp in world.get_blueprint_library().filter('vehicle'):
+    print(bp.id)
+
+		
